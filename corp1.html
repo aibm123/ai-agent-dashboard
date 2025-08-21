@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Agent & Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.2/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f1f5f9; /* slate-100 */
+        }
+        .kpi-card {
+            transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+        }
+        .kpi-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+        }
+        .chart-container {
+            min-height: 350px;
+        }
+        .loader {
+            border-top-color: #ffffff;
+            animation: spin 1s linear infinite;
+        }
+        .ai-loader {
+            border-top-color: #4f46e5; /* indigo-600 */
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .prose ul { list-style-type: disc; margin-left: 1.5rem; }
+        .prose h3 { font-weight: 600; margin-top: 1rem; margin-bottom: 0.5rem;}
+        .prose p, .prose ul { margin-bottom: 0.75rem; }
+        .tab-btn.active {
+            border-color: #4f46e5;
+            color: #4f46e5;
+            background-color: #eef2ff;
+        }
+        .chat-bubble-user {
+            background-color: #3b82f6;
+            color: white;
+        }
+        .chat-bubble-ai {
+            background-color: #e5e7eb;
+            color: #1f2937;
+        }
+        .typing-dot {
+            animation: typing-pulse 1.5s infinite;
+        }
+        .typing-dot:nth-child(2) { animation-delay: 0.2s; }
+        .typing-dot:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes typing-pulse {
+            0%, 100% { opacity: 0.2; transform: scale(0.8); }
+            50% { opacity: 1; transform: scale(1); }
+        }
+        .sortable-header {
+            cursor: pointer;
+            user-select: none;
+        }
+        .sortable-header:hover {
+            background-color: #f1f5f9;
+        }
+        .sort-icon {
+            opacity: 0.5;
+            transition: opacity 0.2s ease;
+        }
+        .sortable-header.sorted .sort-icon {
+            opacity: 1;
+        }
+    </style>
+</head>
+<body class="text-slate-800">
+
+    <div class="container mx-auto p-4 md:p-6">
+        <!-- Header -->
+        <header class="flex flex-col md:flex-row justify-between items-center mb-4">
+            <div>
+                <h1 class="text-3xl font-bold text-slate-900">AI Agent & Báo cáo</h1>
+                <p id="lastUpdated" class="text-slate-600 mt-1">Chọn tab Báo cáo để tải dữ liệu.</p>
+            </div>
+             <div class="flex items-center gap-2 mt-4 md:mt-0">
+                <button id="refreshAiBtn" class="bg-indigo-600 text-white font-semibold px-4 py-2.5 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center disabled:bg-indigo-400 disabled:cursor-wait">
+                     <svg id="refreshAiIcon" xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                    <div id="aiLoader" class="loader w-5 h-5 rounded-full border-2 border-slate-200 hidden mr-2"></div>
+                    <span>Phân tích AI</span>
+                </button>
+            </div>
+        </header>
+
+        <!-- Navigation Tabs -->
+        <div class="border-b border-slate-200 mb-6">
+            <nav class="-mb-px flex space-x-6" aria-label="Tabs">
+                <button id="tab-chatbot" class="tab-btn active whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm">Chatbot</button>
+                <button id="tab-dashboard" class="tab-btn whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-slate-500 hover:text-slate-700">Báo cáo</button>
+            </nav>
+        </div>
+
+        <!-- Main Content -->
+        <!-- *** LAYOUT FIX: Applied a fixed height to the main content area *** -->
+        <main style="height: 70vh;">
+            <!-- Chatbot View -->
+            <div id="view-chatbot" class="h-full">
+                <div class="bg-white rounded-lg shadow-sm p-4 flex flex-col h-full">
+                    <div id="chat-messages" class="flex-grow overflow-y-auto mb-4 pr-2 space-y-4">
+                         <div class="flex justify-start"><div class="chat-bubble-ai p-3 rounded-lg max-w-lg">Xin chào! Tôi là AI Agent, tôi có thể giúp bạn tra cứu thông tin đơn hàng và khách hàng.</div></div>
+                    </div>
+                    <div class="flex gap-2 border-t pt-4 flex-shrink-0">
+                        <input type="text" id="chat-input" placeholder="Hỏi AI, ví dụ: 'trạng thái đơn hàng ORD_12345'..." class="flex-grow w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition">
+                        <button id="chat-send-btn" class="bg-indigo-600 text-white font-semibold px-5 py-2 rounded-lg hover:bg-indigo-700 transition-colors shadow-sm flex items-center justify-center disabled:bg-indigo-400">Gửi</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Dashboard View -->
+            <div id="view-dashboard" class="hidden h-full overflow-y-auto">
+                <div id="dashboard-loader" class="text-center p-10">
+                    <div class="loader inline-block w-8 h-8 rounded-full border-4 border-slate-200" style="border-top-color: #4f46e5;"></div>
+                    <p class="mt-4 text-slate-600">Đang tải dữ liệu báo cáo...</p>
+                </div>
+
+                <div id="dashboard-content" class="hidden">
+                    <!-- AI Analysis -->
+                    <div id="ai-analysis-container" class="mb-6 bg-white p-6 rounded-lg shadow-sm">
+                        <h2 class="text-xl font-bold text-slate-800 mb-3 flex items-center">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 mr-2 text-indigo-600" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M9.663 17h4.673M12 3v1m6.364 1.636l-.707.707M21 12h-1M4 12H3m3.343-5.657l-.707-.707m2.828 9.9a5 5 0 117.072 0l-.548.547A3.374 3.374 0 0014 18.469V19a2 2 0 11-4 0v-.531c0-.895-.356-1.754-.988-2.386l-.548-.547z" /></svg>
+                            <span>AI Phân tích & Đề xuất</span>
+                        </h2>
+                         <div id="ai-summary" class="text-slate-700 prose prose-sm max-w-none">
+                            <p>Nhấn nút "Phân tích AI" để nhận đề xuất chi tiết dựa trên dữ liệu đang hiển thị.</p>
+                        </div>
+                    </div>
+
+                    <!-- KPI Cards -->
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 mb-6">
+                        <div class="kpi-card bg-white p-6 rounded-lg shadow-sm">
+                            <p class="text-sm text-slate-500">Tổng số Đơn hàng</p>
+                            <p id="kpi-total-orders" class="text-2xl font-bold">0</p>
+                        </div>
+                        <div class="kpi-card bg-white p-6 rounded-lg shadow-sm">
+                            <p class="text-sm text-slate-500">Tổng Doanh thu</p>
+                            <p id="kpi-total-revenue" class="text-2xl font-bold">0</p>
+                        </div>
+                        <div class="kpi-card bg-white p-6 rounded-lg shadow-sm">
+                            <p class="text-sm text-slate-500">Số lượng Khách hàng</p>
+                            <p id="kpi-total-customers" class="text-2xl font-bold">0</p>
+                        </div>
+                        <div class="kpi-card bg-white p-6 rounded-lg shadow-sm">
+                             <p class="text-sm text-slate-500">Đơn hàng Trung bình</p>
+                            <p id="kpi-avg-order-value" class="text-2xl font-bold">0</p>
+                        </div>
+                    </div>
+                    <!-- Charts -->
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                        <div class="bg-white p-4 rounded-lg shadow-sm chart-container flex flex-col">
+                            <h3 class="font-semibold mb-4">Số lượng đơn hàng theo ngày</h3>
+                            <div class="flex-grow"><canvas id="ordersByDateChart"></canvas></div>
+                        </div>
+                        <div class="bg-white p-4 rounded-lg shadow-sm chart-container flex flex-col">
+                            <h3 class="font-semibold mb-4">Phân bổ Trạng thái Đơn hàng</h3>
+                            <div class="flex-grow"><canvas id="orderStatusChart"></canvas></div>
+                        </div>
+                    </div>
+                    <!-- Data Table -->
+                    <div class="bg-white p-4 rounded-lg shadow-sm">
+                        <div class="flex flex-col md:flex-row justify-between items-center mb-4 gap-4">
+                            <h3 class="font-semibold text-lg">Chi tiết Đơn hàng</h3>
+                            <div class="flex items-center gap-4">
+                                <label for="statusFilter" class="text-sm font-medium">Trạng thái:</label>
+                                <select id="statusFilter" class="w-full md:w-48 p-2 border border-slate-300 rounded-md focus:ring-2 focus:ring-blue-500"></select>
+                            </div>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-slate-200">
+                                <thead class="bg-slate-50">
+                                    <tr>
+                                        <th scope="col" class="sortable-header px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider" data-sort="OrderID">Mã Đơn hàng</th>
+                                        <th scope="col" class="sortable-header px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider" data-sort="CustomerName">Tên Khách hàng</th>
+                                        <th scope="col" class="sortable-header px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider" data-sort="OrderDate">Ngày Đặt</th>
+                                        <th scope="col" class="sortable-header px-6 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider" data-sort="Status">Trạng thái</th>
+                                        <th scope="col" class="sortable-header px-6 py-3 text-right text-xs font-medium text-slate-500 uppercase tracking-wider" data-sort="TotalAmount">Tổng tiền (VND)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="dataTableBody" class="bg-white divide-y divide-slate-200"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+        <div id="error-message" class="hidden mt-6 p-4 bg-red-100 border-l-4 border-red-500 text-red-700"></div>
+    </div>
+
+    <script type="module">
+        // --- CONFIGURATION ---
+        const CHATBOT_WEBHOOK_URL = 'https://aps.aibm.space/webhook/vibe1';
+
+        // --- DOM ELEMENTS ---
+        const lastUpdated = document.getElementById('lastUpdated');
+        const errorMessage = document.getElementById('error-message');
+        const refreshAiBtn = document.getElementById('refreshAiBtn');
+        const aiLoader = document.getElementById('aiLoader');
+        const refreshAiIcon = document.getElementById('refreshAiIcon');
+        const aiSummaryDiv = document.getElementById('ai-summary');
+        
+        const tabDashboard = document.getElementById('tab-dashboard');
+        const tabChatbot = document.getElementById('tab-chatbot');
+        const viewDashboard = document.getElementById('view-dashboard');
+        const viewChatbot = document.getElementById('view-chatbot');
+        
+        const chatMessages = document.getElementById('chat-messages');
+        const chatInput = document.getElementById('chat-input');
+        const chatSendBtn = document.getElementById('chat-send-btn');
+        
+        const dashboardLoader = document.getElementById('dashboard-loader');
+        const dashboardContent = document.getElementById('dashboard-content');
+        const kpiTotalOrders = document.getElementById('kpi-total-orders');
+        const kpiTotalRevenue = document.getElementById('kpi-total-revenue');
+        const kpiTotalCustomers = document.getElementById('kpi-total-customers');
+        const kpiAvgOrderValue = document.getElementById('kpi-avg-order-value');
+        const dataTableBody = document.getElementById('dataTableBody');
+        const statusFilter = document.getElementById('statusFilter');
+        
+        // --- STATE ---
+        let isProcessing = false;
+        let allDashboardData = []; // To store all data
+        let displayedData = []; // To store filtered/sorted data
+        let charts = {};
+        let sortConfig = { key: 'OrderDate', direction: 'descending' };
+
+        // --- INITIALIZATION ---
+        document.addEventListener('DOMContentLoaded', () => {
+            addEventListeners();
+        });
+        
+        function addEventListeners() {
+            tabDashboard.addEventListener('click', () => switchView('dashboard'));
+            tabChatbot.addEventListener('click', () => switchView('chatbot'));
+            chatSendBtn.addEventListener('click', handleChatSubmit);
+            chatInput.addEventListener('keyup', (event) => {
+                if (event.key === 'Enter') handleChatSubmit();
+            });
+            refreshAiBtn.addEventListener('click', handleAiAnalysis);
+            statusFilter.addEventListener('change', applyFiltersAndSorting);
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                header.addEventListener('click', () => {
+                    const sortKey = header.dataset.sort;
+                    if (sortConfig.key === sortKey) {
+                        sortConfig.direction = sortConfig.direction === 'ascending' ? 'descending' : 'ascending';
+                    } else {
+                        sortConfig.key = sortKey;
+                        sortConfig.direction = 'ascending';
+                    }
+                    applyFiltersAndSorting();
+                });
+            });
+        }
+
+        function switchView(viewName) {
+            if (viewName === 'dashboard') {
+                viewDashboard.classList.remove('hidden');
+                viewChatbot.classList.add('hidden');
+                tabDashboard.classList.add('active');
+                tabChatbot.classList.remove('active');
+                if (allDashboardData.length === 0) {
+                    loadDashboardData();
+                }
+            } else {
+                viewDashboard.classList.add('hidden');
+                viewChatbot.classList.remove('hidden');
+                tabDashboard.classList.remove('active');
+                tabChatbot.classList.add('active');
+            }
+        }
+
+        // --- CHATBOT LOGIC ---
+        async function handleChatSubmit() {
+            const userInput = chatInput.value.trim();
+            if (!userInput || isProcessing) return;
+            
+            setLoadingState(true, 'chat');
+            appendChatMessage(userInput, 'user');
+            chatInput.value = '';
+            showTypingIndicator(true);
+
+            try {
+                const response = await fetch(CHATBOT_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ "prompt": userInput, "threadId": "general-chat" })
+                });
+
+                if (!response.ok) throw new Error(`Lỗi từ webhook: ${response.status}`);
+
+                const result = await response.json();
+                const aiResponse = result[0]?.output || "Xin lỗi, tôi không thể xử lý yêu cầu này.";
+                appendChatMessage(aiResponse, 'ai');
+            } catch (error) {
+                appendChatMessage(`Đã xảy ra lỗi: ${error.message}`, 'ai');
+            } finally {
+                showTypingIndicator(false);
+                setLoadingState(false, 'chat');
+            }
+        }
+        
+        function showTypingIndicator(show) {
+            let indicator = document.getElementById('typing-indicator');
+            if (show) {
+                if (!indicator) {
+                    indicator = document.createElement('div');
+                    indicator.id = 'typing-indicator';
+                    indicator.className = 'flex justify-start';
+                    indicator.innerHTML = `<div class="chat-bubble-ai p-3 rounded-lg max-w-lg flex items-center space-x-1"><div class="typing-dot w-2 h-2 bg-slate-500 rounded-full"></div><div class="typing-dot w-2 h-2 bg-slate-500 rounded-full"></div><div class="typing-dot w-2 h-2 bg-slate-500 rounded-full"></div></div>`;
+                    chatMessages.appendChild(indicator);
+                }
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            } else {
+                if (indicator) indicator.remove();
+            }
+        }
+
+        function appendChatMessage(message, sender) {
+            showTypingIndicator(false);
+            const messageWrapper = document.createElement('div');
+            messageWrapper.className = `flex ${sender === 'user' ? 'justify-end' : 'justify-start'}`;
+            const messageBubble = document.createElement('div');
+            messageBubble.className = `p-3 rounded-lg max-w-lg ${sender === 'user' ? 'chat-bubble-user' : 'chat-bubble-ai'}`;
+            messageBubble.innerHTML = marked.parse(message);
+            messageWrapper.appendChild(messageBubble);
+            chatMessages.appendChild(messageWrapper);
+            chatMessages.scrollTop = chatMessages.scrollHeight;
+        }
+
+        // --- DASHBOARD LOGIC ---
+        async function loadDashboardData() {
+            dashboardLoader.classList.remove('hidden');
+            dashboardContent.classList.add('hidden');
+            hideError();
+
+            try {
+                const response = await fetch(CHATBOT_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        "prompt": "FETCH_ALL_DATA_FOR_DASHBOARD",
+                        "threadId": "dashboard-data-fetch" 
+                    })
+                });
+
+                if (!response.ok) throw new Error(`Lỗi mạng: ${response.status}`);
+                
+                const rawResponse = await response.json();
+                
+                if (rawResponse && rawResponse[0] && rawResponse[0].output) {
+                    const parsedData = JSON.parse(rawResponse[0].output);
+
+                    if (!parsedData.customers || !parsedData.orders) {
+                        throw new Error("Định dạng dữ liệu trả về không hợp lệ.");
+                    }
+
+                    const customersMap = new Map(parsedData.customers.map(c => [c.CustomerID, c]));
+                    const combinedData = parsedData.orders.map(o => {
+                        const customer = customersMap.get(o.CustomerID);
+                        return { ...o, CustomerName: customer ? `${customer.FirstName} ${customer.LastName}` : 'N/A' };
+                    });
+                    
+                    allDashboardData = combinedData;
+                    populateStatusFilter(allDashboardData);
+                    
+                    initializeCharts(); 
+                    applyFiltersAndSorting(); 
+
+                    dashboardLoader.classList.add('hidden');
+                    dashboardContent.classList.remove('hidden');
+                    const now = new Date();
+                    lastUpdated.textContent = `Cập nhật lần cuối lúc: ${now.toLocaleTimeString('vi-VN')}`;
+                } else {
+                    throw new Error("Phản hồi từ Agent không hợp lệ.");
+                }
+
+            } catch (error) {
+                console.error("Lỗi khi tải dữ liệu Dashboard:", error);
+                showError(error.message);
+                dashboardLoader.classList.add('hidden');
+            }
+        }
+
+        function populateStatusFilter(data) {
+            const statuses = [...new Set(data.map(item => item.Status))];
+            statusFilter.innerHTML = '<option value="all">Tất cả Trạng thái</option>';
+            statuses.forEach(status => {
+                const option = document.createElement('option');
+                option.value = status;
+                option.textContent = status;
+                statusFilter.appendChild(option);
+            });
+        }
+
+        function applyFiltersAndSorting() {
+            let filteredData = [...allDashboardData];
+
+            // Status filter
+            const selectedStatus = statusFilter.value;
+            if (selectedStatus && selectedStatus !== 'all') {
+                filteredData = filteredData.filter(d => d.Status === selectedStatus);
+            }
+            
+            // Sorting
+            filteredData.sort((a, b) => {
+                const aValue = a[sortConfig.key];
+                const bValue = b[sortConfig.key];
+                let comparison = 0;
+                if (aValue > bValue) comparison = 1;
+                else if (aValue < bValue) comparison = -1;
+                return sortConfig.direction === 'descending' ? comparison * -1 : comparison;
+            });
+
+            displayedData = filteredData;
+            updateDashboardUI(displayedData);
+        }
+
+        function initializeCharts() {
+            const chartIds = ['ordersByDateChart', 'orderStatusChart'];
+            chartIds.forEach(id => {
+                if (charts[id]) charts[id].destroy();
+            });
+
+            const defaultOptions = { responsive: true, maintainAspectRatio: false };
+            charts.ordersByDate = new Chart(document.getElementById('ordersByDateChart'), {
+                type: 'line', data: { labels: [], datasets: [] }, options: defaultOptions
+            });
+            charts.orderStatus = new Chart(document.getElementById('orderStatusChart'), {
+                type: 'doughnut', data: { labels: [], datasets: [] }, options: defaultOptions
+            });
+        }
+
+        function updateDashboardUI(data) {
+            if (!data) return;
+            updateKPIs(data);
+            updateCharts(data);
+            updateDataTable(data);
+            updateSortIcons();
+        }
+
+        function updateKPIs(data) {
+            const totalOrders = data.length;
+            const totalRevenue = data.reduce((sum, order) => sum + parseFloat(order.TotalAmount || 0), 0);
+            const uniqueCustomerIds = new Set(data.map(order => order.CustomerID));
+            const totalCustomers = uniqueCustomerIds.size;
+            const avgOrderValue = totalOrders > 0 ? totalRevenue / totalOrders : 0;
+            
+            const currencyFormatter = new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' });
+            const numberFormatter = new Intl.NumberFormat('en-US');
+
+            kpiTotalOrders.textContent = numberFormatter.format(totalOrders);
+            kpiTotalRevenue.textContent = currencyFormatter.format(totalRevenue);
+            kpiTotalCustomers.textContent = numberFormatter.format(totalCustomers);
+            kpiAvgOrderValue.textContent = currencyFormatter.format(avgOrderValue);
+        }
+
+        function updateCharts(data) {
+            // Orders by Date Chart
+            const ordersByDate = data.reduce((acc, order) => {
+                const date = order.OrderDate.split(' ')[0];
+                acc[date] = (acc[date] || 0) + 1;
+                return acc;
+            }, {});
+            const sortedDates = Object.keys(ordersByDate).sort((a, b) => new Date(a) - new Date(b));
+            charts.ordersByDate.data.labels = sortedDates;
+            charts.ordersByDate.data.datasets = [{
+                label: 'Số đơn hàng',
+                data: sortedDates.map(date => ordersByDate[date]),
+                borderColor: '#4f46e5',
+                tension: 0.1,
+                fill: false
+            }];
+            charts.ordersByDate.update();
+
+            // Order Status Chart
+            const statusCounts = data.reduce((acc, order) => {
+                acc[order.Status] = (acc[order.Status] || 0) + 1;
+                return acc;
+            }, {});
+            charts.orderStatus.data.labels = Object.keys(statusCounts);
+            charts.orderStatus.data.datasets = [{
+                label: 'Trạng thái',
+                data: Object.values(statusCounts),
+                backgroundColor: ['#3b82f6', '#22c55e', '#f97316', '#ef4444', '#6b7280']
+            }];
+            charts.orderStatus.update();
+        }
+
+        function updateDataTable(data) {
+            dataTableBody.innerHTML = '';
+            if (data.length === 0) {
+                dataTableBody.innerHTML = `<tr><td colspan="5" class="text-center text-slate-500 py-4">Không có dữ liệu phù hợp.</td></tr>`;
+                return;
+            }
+            
+            const currencyFormatter = new Intl.NumberFormat('vi-VN');
+            data.forEach(item => {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-slate-900">${item.OrderID}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${item.CustomerName}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${item.OrderDate}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500">${item.Status}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-slate-500 text-right">${currencyFormatter.format(item.TotalAmount)}</td>
+                `;
+                dataTableBody.appendChild(row);
+            });
+        }
+        
+        function updateSortIcons() {
+            document.querySelectorAll('.sortable-header').forEach(header => {
+                const icon = header.querySelector('.sort-icon');
+                if (!icon) {
+                    const newIcon = document.createElement('span');
+                    newIcon.className = 'sort-icon';
+                    header.appendChild(newIcon);
+                }
+                if (header.dataset.sort === sortConfig.key) {
+                    header.classList.add('sorted');
+                    header.querySelector('.sort-icon').innerHTML = sortConfig.direction === 'ascending' ? ' ▲' : ' ▼';
+                } else {
+                    header.classList.remove('sorted');
+                    header.querySelector('.sort-icon').innerHTML = '';
+                }
+            });
+        }
+
+        async function handleAiAnalysis() {
+            if (isProcessing || displayedData.length === 0) {
+                aiSummaryDiv.innerHTML = `<p>Không có dữ liệu để phân tích. Vui lòng tải dữ liệu hoặc điều chỉnh bộ lọc.</p>`;
+                return;
+            }
+            setLoadingState(true, 'ai');
+            aiSummaryDiv.innerHTML = `<div class="flex items-center"><div class="ai-loader w-5 h-5 rounded-full border-2 mr-3"></div><span>AI đang phân tích dữ liệu...</span></div>`;
+
+            const dataSummary = {
+                recordCount: displayedData.length,
+                totalRevenue: displayedData.reduce((sum, order) => sum + parseFloat(order.TotalAmount || 0), 0),
+                statusCounts: displayedData.reduce((acc, order) => {
+                    acc[order.Status] = (acc[order.Status] || 0) + 1;
+                    return acc;
+                }, {}),
+            };
+
+            const prompt = `ANALYZE_DATA_PROMPT: ${JSON.stringify(dataSummary)}`;
+
+            try {
+                const response = await fetch(CHATBOT_WEBHOOK_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        "prompt": prompt,
+                        "threadId": "dashboard-ai-analysis"
+                    })
+                });
+                if (!response.ok) throw new Error(`Lỗi từ webhook: ${response.status}`);
+                const result = await response.json();
+                const aiResponse = result[0]?.output || "Không nhận được phân tích từ AI.";
+                aiSummaryDiv.innerHTML = marked.parse(aiResponse);
+            } catch (error) {
+                aiSummaryDiv.innerHTML = `<p class="text-red-600"><strong>Lỗi:</strong> ${error.message}</p>`;
+            } finally {
+                setLoadingState(false, 'ai');
+            }
+        }
+
+        // --- UTILITY FUNCTIONS ---
+        function setLoadingState(isLoading, type) {
+            isProcessing = isLoading;
+            refreshAiBtn.disabled = isLoading;
+            if (type === 'chat') {
+                chatSendBtn.disabled = isLoading;
+                chatInput.disabled = isLoading;
+            } else if (type === 'ai') {
+                aiLoader.classList.toggle('hidden', !isLoading);
+                refreshAiIcon.classList.toggle('hidden', isLoading);
+            }
+        }
+
+        function showError(msg) {
+            errorMessage.textContent = `Lỗi: ${msg}`;
+            errorMessage.classList.remove('hidden');
+        }
+
+        function hideError() {
+            errorMessage.classList.add('hidden');
+        }
+
+    </script>
+</body>
+</html>

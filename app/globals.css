@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+body {
+  font-family: 'Inter', sans-serif;
+}
+
+/* Custom styles */
+.kpi-card {
+  transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+
+.kpi-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+}
+
+.chart-container {
+  min-height: 350px;
+}
+
+.loader {
+  border-top-color: #ffffff;
+  animation: spin 1s linear infinite;
+}
+
+.ai-loader {
+  border-top-color: #4f46e5;
+  animation: spin 1s linear infinite;
+}
+
+.tab-btn.active {
+  border-color: #4f46e5;
+  color: #4f46e5;
+  background-color: #eef2ff;
+}
+
+.chat-bubble-user {
+  background-color: #3b82f6;
+  color: white;
+}
+
+.chat-bubble-ai {
+  background-color: #e5e7eb;
+  color: #1f2937;
+}
+
+.typing-dot {
+  animation: typing-pulse 1.5s infinite;
+}
+
+.typing-dot:nth-child(2) { 
+  animation-delay: 0.2s; 
+}
+
+.typing-dot:nth-child(3) { 
+  animation-delay: 0.4s; 
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+}
+
+.sortable-header:hover {
+  background-color: #f1f5f9;
+}
+
+.sort-icon {
+  opacity: 0.5;
+  transition: opacity 0.2s ease;
+}
+
+.sortable-header.sorted .sort-icon {
+  opacity: 1;
+}

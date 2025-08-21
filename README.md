@@ -20,7 +20,6 @@ corp/
 │   ├── globals.css        # Tailwind CSS styles
 │   ├── layout.tsx         # Root layout
 │   └── page.tsx           # Main page component
-├── corp1.html             # File HTML gốc (tham khảo)
 ├── package.json           # Dependencies và scripts
 ├── tsconfig.json          # TypeScript configuration
 ├── tailwind.config.js     # Tailwind CSS configuration
@@ -28,6 +27,7 @@ corp/
 ├── next.config.js         # Next.js configuration
 ├── .gitignore             # Git ignore rules
 ├── env.example            # Environment variables example
+├── DEPLOYMENT.md          # Hướng dẫn deploy chi tiết
 └── README.md              # File này
 ```
 
